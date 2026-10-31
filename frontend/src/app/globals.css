@@ -1,0 +1,410 @@
+@import "tailwindcss";
+
+/*
+  ER_OS: the design language, translated from ZUI_OS (zui.ooo), then edited
+  down to what a daily-use data tool needs.
+
+  Kept from ZUI:
+  * One accent, a phosphor green that means "live / yours to act on". Every
+    other colour is a neutral with a slight olive bias toward it.
+  * Text dims instead of greying: --foreground, --muted, --faint. Warnings are
+    dim text, not orange; only errors get their own colour.
+  * Hairlines, not shadows. Small radii for surfaces, 999px for pills and dots.
+  * Monospace as the voice of the machine: labels, numbers, ids, scores, table
+    cells and status lines ("STATUS : running") are Geist Mono.
+
+  Edited out (v2, "simplify"):
+  * Mono for everything. Prose, titles and buttons are Geist Sans now: the
+    mono reads as data precisely because it is no longer everywhere.
+  * Most of the terminal glyphs ($, //, --, #, [x]). They were decoration;
+    position and colour already say what they said.
+  * A text-block progress bar, replaced by a real one that can animate.
+
+  Motion: one curve (--ease-out, a fast-out expo), three durations (150ms for
+  state, 300ms for movement, 600-800ms for entrances and numbers). Things that
+  are running move; things at rest do not. prefers-reduced-motion stops all of it.
+*/
+
+:root {
+  color-scheme: light;
+
+  --background: #f3f4ef;
+  --foreground: #161a15;
+  --surface: #fbfbf8;
+  --surface-subtle: #f0f1eb;
+  --surface-raised: #e8eae3;
+  --border: #d6d9cf;
+  --border-strong: #b9beb2;
+
+  --muted: #585f55; /* 5.4:1 on raised */
+  --faint: #7c8378; /* separators, placeholders: never body text */
+
+  --accent: #137336; /* 4.9:1 on raised */
+  --accent-dim: #e3f3e7;
+  --accent-border: #9fd0ae;
+  --accent-glow: rgb(19 115 54 / 0.18);
+
+  --err: #b42318;
+  --err-dim: #f8e3e0;
+  --err-border: #ecb4ad;
+
+  --diff-remove-bg: #f8e3e0;
+  --diff-remove-fg: #8f1d14;
+  --diff-add-bg: #e3f3e7;
+  --diff-add-fg: #0f5a2a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    /* ZUI_OS's own palette. */
+    --background: #0f1210;
+    --foreground: #d4d8d0;
+    --surface: #151914;
+    --surface-subtle: #121611;
+    --surface-raised: #1d221c;
+    --border: #252a24;
+    --border-strong: #353b33;
+
+    --muted: #8a9088; /* 5.0:1 on raised */
+    --faint: #646a62;
+
+    --accent: #4ade80;
+    --accent-dim: #17351f;
+    --accent-border: #2a5c38;
+    --accent-glow: rgb(74 222 128 / 0.22);
+
+    --err: #d96a6a; /* ZUI's #d16060, lifted to pass AA on raised surfaces */
+    --err-dim: #2d1716;
+    --err-border: #5c2a2a;
+
+    --diff-remove-bg: #3a1a19;
+    --diff-remove-fg: #f0a8a5;
+    --diff-add-bg: #1a3d24;
+    --diff-add-fg: #93e6b0;
+  }
+}
+
+/*
+  Tailwind v4 is configured here, not in tailwind.config.ts (v4 reads its theme
+  from CSS; a config file is ignored unless loaded with @config).
+*/
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--border);
+  --color-hairline-strong: var(--border-strong);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-border: var(--accent-border);
+  --color-err: var(--err);
+  --color-err-dim: var(--err-dim);
+  --color-err-border: var(--err-border);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* Floored at 11px; body is 14px sans. */
+  --text-label: 0.6875rem; /* 11px mono, uppercase + tracked */
+  --text-label--letter-spacing: 0.08em;
+  --text-label--line-height: 1.4;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.55;
+  --text-base: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.375rem;
+  --text-xl--letter-spacing: -0.02em;
+  --text-2xl: 1.75rem;
+  --text-2xl--letter-spacing: -0.03em;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-rise: rise 0.6s var(--ease-out) both;
+  --animate-pop: pop 0.4s var(--ease-out) both;
+  --animate-blink: blink 1.06s steps(1) infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+}
+
+/* --- Keyframes ---------------------------------------------------------------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+/* Skeletons and the active-stage label: a highlight sweeping left to right. */
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+/* The ring around a running status dot. */
+@keyframes ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  80%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+/* The sheen travelling along a progress bar while its stage runs. */
+@keyframes sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+/* Progress with no total yet: a short segment sliding across. */
+@keyframes indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+/* The dropzone border while a file is dragged over it. */
+@keyframes march {
+  to {
+    background-position:
+      16px 0,
+      -16px 100%,
+      0 -16px,
+      100% 16px;
+  }
+}
+/* A connector line drawing itself out from its origin. */
+@keyframes draw {
+  from {
+    transform: scale(0);
+  }
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  /*
+    One focus ring for the whole app, on :focus-visible only. `:focus` alone
+    would ring on every click; removing the outline without a replacement would
+    strip keyboard navigation, and this UI is keyboard-driven.
+  */
+  :focus-visible {
+    outline: 2px solid var(--accent-border);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::placeholder {
+    color: var(--faint);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* --- Utilities ------------------------------------------------------------------ */
+
+/* 11px mono, tracked, uppercase: column headers, field names, section names. */
+@utility label {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
+  letter-spacing: var(--text-label--letter-spacing);
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* An inline link: accent text over an accent hairline. */
+@utility link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-border);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+  &:hover {
+    text-decoration-color: var(--accent);
+  }
+}
+
+/*
+  Children rise in one after another. Put it on a list or a page column; the
+  first eight children are staggered 50ms apart, the rest arrive together.
+*/
+@utility stagger {
+  & > * {
+    animation: rise 0.6s var(--ease-out) both;
+  }
+  & > *:nth-child(2) { animation-delay: 50ms; }
+  & > *:nth-child(3) { animation-delay: 100ms; }
+  & > *:nth-child(4) { animation-delay: 150ms; }
+  & > *:nth-child(5) { animation-delay: 200ms; }
+  & > *:nth-child(6) { animation-delay: 250ms; }
+  & > *:nth-child(7) { animation-delay: 300ms; }
+  & > *:nth-child(n + 8) { animation-delay: 350ms; }
+}
+
+/* A loading block with a highlight sweeping across it. */
+@utility skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-subtle) 0%,
+    var(--surface-raised) 50%,
+    var(--surface-subtle) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Text with a light sweeping through it: the stage that is running right now. */
+@utility text-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--foreground) 0%,
+    var(--foreground) 40%,
+    var(--accent) 50%,
+    var(--foreground) 60%,
+    var(--foreground) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: shimmer 2.4s linear infinite;
+}
+
+/* The ring that radiates from a running status dot. */
+@utility ping {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: currentColor;
+    animation: ping 1.8s var(--ease-out) infinite;
+  }
+}
+
+/* A light travelling along a progress fill. */
+@utility sheen {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+    animation: sheen 1.8s var(--ease-out) infinite;
+  }
+}
+
+@utility indeterminate {
+  animation: indeterminate 1.4s var(--ease-out) infinite;
+}
+
+/* Marching dashed border, drawn with four gradients so it can move. */
+@utility marching {
+  border-color: transparent !important;
+  background-image:
+    linear-gradient(90deg, var(--accent) 50%, transparent 0),
+    linear-gradient(90deg, var(--accent) 50%, transparent 0),
+    linear-gradient(0deg, var(--accent) 50%, transparent 0),
+    linear-gradient(0deg, var(--accent) 50%, transparent 0);
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-size:
+    8px 1px,
+    8px 1px,
+    1px 8px,
+    1px 8px;
+  background-position:
+    0 0,
+    0 100%,
+    0 0,
+    100% 0;
+  animation: march 0.6s linear infinite;
+}
+
+@utility menu-in {
+  transform-origin: top right;
+  animation: menu-in 0.2s var(--ease-out) both;
+}
+
+/* Diff segment tints, used by the field-level diff in the resolution view. */
+.diff-remove {
+  background: var(--diff-remove-bg);
+  color: var(--diff-remove-fg);
+  border-radius: var(--radius-sm);
+  padding: 0 1px;
+}
+.diff-add {
+  background: var(--diff-add-bg);
+  color: var(--diff-add-fg);
+  border-radius: var(--radius-sm);
+  padding: 0 1px;
+}

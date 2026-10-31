@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ER-PLATFORM-001 — Architecture &amp; Concepts</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root {
+    --ink: #16181d; --muted: #5b6472; --line: #d7dce3; --accent: #1f6feb;
+    --bg-soft: #f6f8fa; --warn: #9a6700; --good: #1a7f37; --bad: #b42318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 10.5pt/1.55 "Segoe UI", -apple-system, system-ui, sans-serif;
+    color: var(--ink); margin: 0; padding: 0;
+  }
+  h1 { font-size: 23pt; margin: 0 0 4pt; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 14pt; margin: 22pt 0 7pt; padding-bottom: 3pt;
+    border-bottom: 1.5pt solid var(--ink); letter-spacing: -0.2pt;
+    break-after: avoid;
+  }
+  h3 { font-size: 11.5pt; margin: 14pt 0 4pt; break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 10pt 0 3pt; color: var(--muted);
+       text-transform: uppercase; letter-spacing: 0.4pt; font-size: 8.5pt; break-after: avoid; }
+  p, li { margin: 0 0 6pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 16pt; }
+  li { margin-bottom: 3pt; }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 9pt; }
+  code { background: var(--bg-soft); padding: 1pt 3pt; border-radius: 2pt; }
+  pre {
+    background: var(--bg-soft); border: 0.5pt solid var(--line); border-left: 2.5pt solid var(--accent);
+    padding: 7pt 9pt; border-radius: 3pt; overflow-x: auto; white-space: pre-wrap;
+    line-height: 1.45; break-inside: avoid;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 10pt; font-size: 9pt; break-inside: avoid; }
+  th, td { text-align: left; padding: 4pt 6pt; border-bottom: 0.5pt solid var(--line); vertical-align: top; }
+  th { background: var(--bg-soft); font-weight: 600; font-size: 8.5pt;
+       text-transform: uppercase; letter-spacing: 0.3pt; color: var(--muted); }
+  .lede { font-size: 11pt; color: var(--muted); margin-bottom: 14pt; }
+  .meta { font-size: 8.5pt; color: var(--muted); border-top: 0.5pt solid var(--line);
+          padding-top: 5pt; margin-top: 2pt; }
+  .callout {
+    background: var(--bg-soft); border: 0.5pt solid var(--line); border-radius: 3pt;
+    padding: 8pt 10pt; margin: 8pt 0 10pt; break-inside: avoid;
+  }
+  .callout.why { border-left: 2.5pt solid var(--accent); }
+  .callout.trap { border-left: 2.5pt solid var(--warn); background: #fff9ec; }
+  .callout.bug  { border-left: 2.5pt solid var(--bad); background: #fff4f2; }
+  .callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: 700; letter-spacing: 0.5pt;
+         text-transform: uppercase; padding: 1pt 4pt; border-radius: 2pt; vertical-align: 1.5pt; }
+  .tag.why  { background: #ddeaff; color: #0a3069; }
+  .tag.trap { background: #fff1c2; color: var(--warn); }
+  .tag.bug  { background: #ffdcd8; color: var(--bad); }
+  .flow { font-family: "Cascadia Mono", Consolas, monospace; font-size: 8.5pt;
+          line-height: 1.7; background: var(--bg-soft); border: 0.5pt solid var(--line);
+          padding: 9pt; border-radius: 3pt; break-inside: avoid; }
+  .pagebreak { break-before: page; }
+  .toc { columns: 2; column-gap: 20pt; font-size: 9.5pt; }
+  .toc ol { padding-left: 14pt; }
+  .small { font-size: 9pt; color: var(--muted); }
+  .good { color: var(--good); font-weight: 600; }
+  .bad { color: var(--bad); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Entity Resolution Platform</h1>
+<p class="lede">ER-PLATFORM-001 — architecture, every concept used, and why each choice was made.</p>
+<p class="meta">
+  Multi-tenant record linkage for Indian school data. FastAPI + PostgreSQL 16/pgvector + Redis +
+  Celery + XGBoost + sentence-transformers + Splink, with a Next.js 15 frontend.
+  Written for an engineer joining this codebase.
+</p>
+
+<h2>1. What the system does</h2>
+
+<p>
+  A customer uploads a CSV of school records. The same real-world school appears
+  several times, spelled differently each time — <code>Govt. Higher Primary School Unit 7</code>
+  and <code>Government Higher Primary School Unit 7</code> are one school, and nothing in
+  the data says so. The platform decides which rows are the same place, and produces a
+  mapping from every "dirty" record id to a surviving "master" id.
+</p>
+
+<p>
+  This is <strong>entity resolution</strong> (also called record linkage or deduplication).
+  The hard part is not comparing two records — it is that comparing every row against
+  every other row is quadratic. A 50,000-row file is 1.25 billion pairs. The whole
+  architecture is shaped around avoiding that number while still finding the matches.
+</p>
+
+<div class="callout why">
+  <p><span class="tag why">Core idea</span> <strong>Cheap filters first, expensive judgement last.</strong>
+  Each stage removes work from the next. Classification throws away junk before it is
+  embedded; blocking narrows 1.25 billion pairs to a few thousand before they are scored;
+  the confidence gate decides which of those are worth a paid API call or a human's
+  attention. Every stage exists to protect the one after it.</p>
+</div>
+
+<h2>2. The pipeline, end to end</h2>
+
+<div class="flow">
+CSV upload (HTTP 202, returns immediately)<br>
+&nbsp;&nbsp;│<br>
+&nbsp;&nbsp;├─▶ <strong>1. INGEST</strong> — parse CSV in chunks, store each row verbatim as JSONB<br>
+&nbsp;&nbsp;├─▶ <strong>2. CLASSIFY</strong> — XGBoost: Valid / Junk / Missing_Context<br>
+&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(junk never reaches the expensive stages)<br>
+&nbsp;&nbsp;├─▶ <strong>3. EMBED</strong> — normalise text, then 2 × 768-dim vectors per record<br>
+&nbsp;&nbsp;├─▶ <strong>4. BLOCK</strong> — pgvector HNSW nearest-neighbour search → candidate pairs<br>
+&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ connected components → clusters<br>
+&nbsp;&nbsp;├─▶ <strong>5. MATCH</strong> — Splink scores every pair inside every cluster → confidence<br>
+&nbsp;&nbsp;└─▶ <strong>6. GATE</strong> — route each cluster by its tenant's thresholds:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;≥ 0.950 → AUTO_MERGED (no external call)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;≥ 0.750 → PENDING_API (validate against Google Places)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt; 0.750 → PENDING_REVIEW (a human decides)
+</div>
+
+<p>
+  Each stage is a separate Celery task on its own queue with its own worker pool, so the
+  GPU-ish embedding work and the rate-limited API work scale independently.
+</p>
+
+<h2>3. Multi-tenancy and Row-Level Security</h2>
+
+<p>
+  Many customers share one database. The requirement (NFR-02) is that
+  <em>a single forgotten <code>WHERE tenant_id = ?</code> must not be a data breach.</em>
+  That is enforced in two independent layers.
+</p>
+
+<h3>Layer 1 — application scoping</h3>
+<p>
+  The tenant id comes only from a verified JWT claim, never from a request body or query
+  parameter. Every request opens a session bound to that tenant.
+</p>
+
+<h3>Layer 2 — PostgreSQL Row-Level Security (RLS)</h3>
+<p>
+  RLS is a Postgres feature where the database itself attaches an invisible
+  <code>WHERE</code> clause to every query on a table. The policy reads a per-transaction
+  session variable:
+</p>
+
+<pre><code>CREATE POLICY tenant_isolation ON school_records
+  USING      (tenant_id = current_setting('app.tenant_id')::uuid)
+  WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);</code></pre>
+
+<table>
+  <tr><th>Concept</th><th>What it means here</th></tr>
+  <tr><td><code>USING</code></td><td>Governs what rows a query can <em>see</em> (SELECT, and the read half of UPDATE/DELETE).</td></tr>
+  <tr><td><code>WITH CHECK</code></td><td>Governs what rows a query can <em>write</em>. Without it a tenant could insert rows stamped with someone else's id.</td></tr>
+  <tr><td><code>FORCE ROW LEVEL SECURITY</code></td><td>Applies the policy to the table <em>owner</em> too. Plain <code>ENABLE</code> silently exempts the owner — policies look correct and leak anyway.</td></tr>
+  <tr><td>Three DB roles</td><td><code>er_owner</code> (migrations only), <code>er_app</code> (runtime, <code>NOBYPASSRLS</code>), <code>er_platform</code> (<code>BYPASSRLS</code>, control plane only).</td></tr>
+</table>
+
+<div class="callout trap">
+  <p><span class="tag trap">Trap</span> The policy is written as
+  <code>current_setting('app.tenant_id')::uuid</code> with no <code>missing_ok</code> flag,
+  so a query with no tenant bound <strong>raises</strong>. The safer-looking
+  <code>NULLIF(current_setting(..., true), '')</code> returns NULL, matches nothing, and
+  returns <em>zero rows silently</em> — which reads as "this tenant has no data" instead of
+  "you forgot to bind a tenant".</p>
+</div>
+
+<div class="callout bug">
+  <p><span class="tag bug">Bug this caught</span> Five of six write sites had forgotten to set
+  <code>tenant_id</code> at all. The <code>WITH CHECK</code> clause rejected the very first
+  insert, which is exactly what the second layer is for. Found only by running against a
+  real container — no mock would have.</p>
+</div>
+
+<h2 class="pagebreak">4. The data model</h2>
+
+<table>
+  <tr><th>Table</th><th>Purpose</th><th>Notable</th></tr>
+  <tr><td><code>tenants</code></td><td>Root of the tenancy tree</td><td>Per-tenant confidence thresholds and monthly spend cap</td></tr>
+  <tr><td><code>jobs</code></td><td>One uploaded CSV</td><td><code>status</code> + <code>stage_progress</code> JSONB counters</td></tr>
+  <tr><td><code>school_records</code></td><td>One CSV row</td><td><code>raw_row</code> JSONB written once, never mutated</td></tr>
+  <tr><td><code>record_embeddings</code></td><td>Two 768-dim vectors</td><td><code>vector(768)</code> columns, HNSW-indexed</td></tr>
+  <tr><td><code>clusters</code> / <code>cluster_members</code></td><td>Candidate groups</td><td><code>confidence_score NUMERIC(4,3)</code></td></tr>
+  <tr><td><code>google_places_validations</code></td><td>API response cache</td><td>Keyed <code>(tenant_id, query_hash)</code></td></tr>
+  <tr><td><code>human_feedback</code></td><td>Steward verdicts</td><td>Training data, not an audit log</td></tr>
+  <tr><td><code>reference_pincodes</code></td><td>All-India PIN lookup</td><td><strong>Global — no tenant, no RLS</strong></td></tr>
+</table>
+
+<div class="callout why">
+  <p><span class="tag why">Why</span> <strong><code>raw_row</code> is immutable.</strong>
+  Everything else on a record is derived from it, so re-running a stage re-derives rather
+  than re-reads, and the customer's original upload is always recoverable. Derived columns
+  (<code>name_normalized</code>, <code>classification</code>) are nullable because they are
+  populated by a later stage — defaulting them to <code>0</code> or <code>''</code> would be
+  a lie the UI renders as fact.</p>
+</div>
+
+<h4>Alembic migrations</h4>
+<p>
+  Schema changes are versioned Python files applied in order (<code>0001</code> → <code>0004</code>).
+  They run as <code>er_owner</code>; the runtime role deliberately has no <code>CREATE</code>
+  privilege. Migration <code>0002</code> installs RLS and ends with a guard that
+  <strong>fails the migration</strong> if any table lacks a policy — so a table added later
+  cannot ship unprotected.
+</p>
+
+<h2>5. Stage 2 — The classifier (weak supervision)</h2>
+
+<p>
+  A gradient-boosted tree (XGBoost) sorts every row into Valid, Junk or Missing_Context from
+  five cheap features: name length, token count, count of missing required fields, whether the
+  pincode is a placeholder, and whether the name matches a sentinel pattern
+  (<code>N/A</code>, <code>TEST</code>, <code>XXXX</code>).
+</p>
+
+<h3>The cold-start problem</h3>
+<p>
+  A new customer has no labelled data, so there is nothing to train on. The solution is
+  <strong>weak supervision</strong> (the Snorkel pattern): write many imperfect rules, let
+  them vote, and train on the consensus.
+</p>
+
+<pre><code>lf_placeholder_name      → JUNK             (weight 2.0)
+lf_empty_name            → JUNK             (weight 2.0)
+lf_name_has_no_letters   → JUNK             (weight 1.5)
+lf_unusable_pincode      → MISSING_CONTEXT  (weight 1.5)
+lf_several_missing_fields→ MISSING_CONTEXT  (weight 2.0)
+lf_complete_record       → VALID            (weight 2.0)
+lf_descriptive_name      → VALID            (weight 1.0)</code></pre>
+
+<p>
+  Each labelling function votes for one class or <em>abstains</em>. Votes are combined by
+  weighted majority. Rows where the rules disagree, or all abstain, are
+  <strong>dropped from training</strong> rather than guessed at — those are exactly the rows a
+  human should see. Labels produced this way are stamped
+  <code>label_source = 'PSEUDO'</code> so a later retrain can discard them without
+  contaminating real ground truth.
+</p>
+
+<div class="callout bug">
+  <p><span class="tag bug">Bug found in testing</span> A row that was empty in
+  <em>every</em> field was labelled <code>Missing_Context</code>, because the missing-field
+  rules outvoted the junk rules on sheer count of absent fields. A row with nothing in it is
+  not "a real school described thinly" — it is junk. Fixed by gating the Missing_Context
+  rules on the record having a usable name.</p>
+</div>
+
+<h2>6. Stage 3 — Embeddings and normalisation</h2>
+
+<p>
+  An <strong>embedding</strong> turns text into a vector of numbers positioned so that
+  similar meanings land near each other. The model is
+  <code>paraphrase-multilingual-mpnet-base-v2</code>, chosen because Indian school names
+  arrive transliterated inconsistently and sometimes in Devanagari.
+</p>
+
+<p>
+  Two independent vectors are stored per record — one for name, one for address — so that a
+  generic name in two different cities is never treated as one candidate.
+</p>
+
+<h3>Normalisation runs first</h3>
+<pre><code>"Govt. Sr. Sec. School, Hosur"  →  "government senior secondary school hosur"
+"KV No 2 Jalahalli"             →  "kendriya school number 2 jalahalli"
+"Kendriya Vidyalaya No. 2 …"    →  "kendriya school number 2 jalahalli"   ← same string</code></pre>
+
+<p>
+  Lowercase, strip punctuation, expand abbreviations from a table of ~45 Indian school terms,
+  applied repeatedly until the string stops changing. That <em>fixed-point</em> detail matters:
+  <code>kv → kendriya vidyalaya → kendriya school</code> takes two passes, and a single pass
+  would leave the two spellings as different strings.
+</p>
+
+<div class="callout bug">
+  <p><span class="tag bug">Bug found in testing</span> The first version stripped punctuation
+  with a "keep word characters" rule. Python's <code>\w</code> does not count Devanagari vowel
+  marks as word characters, so <code>केंद्रीय विद्यालय</code> came back as a row of bare
+  consonants — silently destroying exactly the multilingual text the model was chosen for.
+  Fixed by naming the punctuation to remove instead of naming the characters to keep.</p>
+</div>
+
+<h2>7. Stage 4 — Blocking (the quadratic problem)</h2>
+
+<p>
+  <strong>Blocking</strong> is the step that makes entity resolution tractable: instead of
+  comparing all pairs, find each record's nearest neighbours in vector space and only compare
+  those.
+</p>
+
+<table>
+  <tr><th>Concept</th><th>Meaning</th></tr>
+  <tr><td><strong>pgvector</strong></td><td>A Postgres extension adding a <code>vector</code> column type and distance operators.</td></tr>
+  <tr><td><strong>Cosine distance</strong> (<code>&lt;=&gt;</code>)</td><td><code>1 − cosine similarity</code>. 0 = identical direction, 2 = opposite.</td></tr>
+  <tr><td><strong>HNSW</strong></td><td>Hierarchical Navigable Small World — a graph index for <em>approximate</em> nearest-neighbour search. Trades exactness for speed.</td></tr>
+  <tr><td><strong>ANN</strong></td><td>Approximate Nearest Neighbour. "Approximate" is the important word.</td></tr>
+  <tr><td><strong>Connected components</strong></td><td>If A–B and B–C are pairs, then A, B, C form one cluster even though A–C was never compared.</td></tr>
+</table>
+
+<div class="callout trap">
+  <p><span class="tag trap">The big trap</span> <strong>pgvector applies the HNSW
+  approximation <em>before</em> the RLS tenant filter.</strong> Ask for the 10 nearest
+  neighbours and the index returns 10 rows from the <em>whole</em> table — which are then
+  filtered down to the ones your tenant may see. If another tenant's rows occupy the nearest
+  slots, you get far fewer than 10, or zero, <strong>with no error and no warning anywhere</strong>.</p>
+  <p>Mitigated two ways: over-fetch (<code>LIMIT top_k × oversample</code>, truncate in Python)
+  and raise <code>hnsw.ef_search</code>, which controls how much of the graph is explored.
+  Both are verified by an integration test that puts 300 of another tenant's records nearer to
+  the probe than any of its own.</p>
+</div>
+
+<h2 class="pagebreak">8. Stage 5 — Probabilistic matching (Splink)</h2>
+
+<p>
+  Vector distance says two records are <em>worth comparing</em>. It does not say they are the
+  same school — two generic government school names are close in vector space whether or not
+  they are the same institution. The actual score comes from Splink, which implements the
+  <strong>Fellegi–Sunter</strong> model.
+</p>
+
+<h3>How Fellegi–Sunter works</h3>
+<table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td><strong>m probability</strong></td><td>P(fields agree | the pair <em>is</em> a match). Learned by Expectation-Maximisation.</td></tr>
+  <tr><td><strong>u probability</strong></td><td>P(fields agree | the pair is <em>not</em> a match). Learned by sampling random pairs.</td></tr>
+  <tr><td><strong>λ (lambda)</strong></td><td>P(two randomly drawn records match at all) — the prior everything else updates.</td></tr>
+  <tr><td><strong>Match weight</strong></td><td><code>log₂(m/u)</code> summed across fields. Agreement on a <em>rare</em> value is worth far more than on a common one.</td></tr>
+</table>
+
+<p>
+  The comparison set is name (Jaro-Winkler bands), address (looser thresholds), and pincode —
+  where a custom comparison exploits the hierarchy of an Indian PIN: exact match, then same
+  sorting district (first 3 digits), then same postal region (first digit).
+</p>
+
+<div class="callout bug">
+  <p><span class="tag bug">Bug found in testing</span> Skipping the λ-estimation step left
+  genuine duplicates scoring <strong>0.043</strong> while non-duplicates scored 0.000. The
+  ordering was right and the numbers were useless — and since auto-merge triggers at 0.950,
+  <em>nothing would ever have merged</em>. Adding the step moved true duplicates to
+  <strong>0.87–0.91</strong>.</p>
+</div>
+
+<div class="callout why">
+  <p><span class="tag why">Why</span> <strong>A cluster's score is the <em>minimum</em>
+  pairwise score inside it, not the mean.</strong> A cluster is a transitive closure — A and C
+  may never have been compared — so it is only as trustworthy as its weakest join. A mean would
+  let one strong pair carry a cluster containing a pair the model scored near zero.</p>
+</div>
+
+<h2>9. Stage 6 — The confidence gate and cost control</h2>
+
+<p>
+  Google Places charges per call. Three independent controls sit in front of every request:
+</p>
+<ol>
+  <li><strong>The confidence gate</strong> decides <em>which</em> clusters may ask at all — only the middle band.</li>
+  <li><strong>The cache</strong> (<code>google_places_validations</code>) decides whether the question was already paid for. Negative results are cached too: a school Google has never heard of is still an answer, and re-buying it every run is the most expensive possible reading of a cache.</li>
+  <li><strong>The field mask</strong> restricts the request to <code>name,formatted_address,geometry</code>. Google bills by field group, so the mask is a line item — and fields not requested are also fields never stored.</li>
+</ol>
+
+<h3>Token bucket rate limiting</h3>
+<p>
+  A <strong>token bucket</strong> holds a number of tokens that refill at a fixed rate. Each API
+  call takes one; empty bucket means wait. Implemented as an atomic Redis Lua script, because
+  with two workers and a retry storm a check-then-decrement race is not theoretical — and every
+  leaked token is a billable call.
+</p>
+<p>
+  Buckets are <strong>per tenant</strong>: with one shared bucket, a single customer's 50k-row
+  backlog would drain the tokens and stall everyone else's validation.
+</p>
+
+<h2>10. Orchestration — Celery, queues, idempotency</h2>
+
+<p>
+  <strong>Celery</strong> is a distributed task queue. The API does not do slow work; it writes a
+  row, pushes a message to <strong>Redis</strong> (the broker), and returns HTTP 202. Worker
+  processes consume messages and do the work.
+</p>
+
+<pre><code>ingest · classify · embeddings · blocking · matching
+google_places · retrain · export · orchestration</code></pre>
+
+<p>
+  Nine queues, each with its own pool and retry policy. <code>google_places</code> is capped at
+  concurrency 2 — that cap is a <em>spend</em> control, not a throughput setting.
+</p>
+
+<h3>Idempotency</h3>
+<p>
+  Celery is configured with <code>task_acks_late</code>: a worker that dies mid-task has its
+  message redelivered. Re-running a stage is therefore <em>normal</em>, not exceptional, and
+  every stage must converge rather than duplicate:
+</p>
+<ul>
+  <li><strong>Ingest</strong> — detects existing records and re-classifies in place instead of re-inserting.</li>
+  <li><strong>Embeddings</strong> — <code>INSERT … ON CONFLICT DO UPDATE</code> keyed on <code>record_id</code>.</li>
+  <li><strong>Blocking</strong> — deletes and rebuilds, but protects clusters a human already decided.</li>
+  <li><strong>Matching</strong> — overwrites scores in place.</li>
+</ul>
+
+<p>
+  Stages hand off <strong>through Postgres, not through message payloads</strong>. A 50k-row job
+  produces ~1 million candidate pairs; routing those through Redis would turn the broker into a
+  data channel it was never sized for.
+</p>
+
+<div class="callout bug">
+  <p><span class="tag bug">Bug found in testing</span> A self-inflicted deadlock. When a stage
+  failed, the error handler opened a <em>second</em> database connection to mark the job FAILED —
+  while the failing transaction still held a lock on that same row. Postgres could not break it
+  (one side was waiting on the client, not on a lock, so there was no cycle to detect) and the
+  worker hung for over ten minutes. Fixed by rolling back the failed transaction <em>before</em>
+  opening the new one.</p>
+</div>
+
+<h2 class="pagebreak">11. The API layer</h2>
+
+<table>
+  <tr><th>Endpoint</th><th>Purpose</th></tr>
+  <tr><td><code>POST /v1/jobs</code></td><td>Upload CSV, create job, enqueue. Returns <strong>202</strong>.</td></tr>
+  <tr><td><code>GET /v1/jobs/{id}</code></td><td>Status and per-stage progress.</td></tr>
+  <tr><td><code>GET /v1/jobs/{id}/stats</code></td><td>Aggregates, computed in SQL.</td></tr>
+  <tr><td><code>GET /v1/jobs/{id}/clusters</code></td><td>Review queue, keyset-paginated.</td></tr>
+  <tr><td><code>GET /v1/jobs/{id}/export</code></td><td>Streaming CSV of dirty id → master id.</td></tr>
+  <tr><td><code>GET /v1/clusters/{id}</code></td><td>Cluster with all member records.</td></tr>
+  <tr><td><code>POST /v1/clusters/{id}/feedback</code></td><td>MERGE / REJECT / SPLIT verdict.</td></tr>
+</table>
+
+<h3>Keyset pagination</h3>
+<p>
+  The review queue pages by <strong>cursor</strong>, not <code>OFFSET</code>. The reason is
+  specific to this screen: stewards resolve clusters <em>while</em> paging through them, so rows
+  leave the filtered set underneath the cursor. Under <code>OFFSET</code>, every resolution shifts
+  the remaining rows left and page 2 silently skips whatever moved into page 1's window — those
+  clusters are never seen again, and nothing reports a problem.
+</p>
+<p>
+  The cursor encodes <code>(created_at, id)</code>. The trailing id makes the sort <em>total</em>,
+  so two clusters created in the same microsecond cannot cause a page to repeat or skip.
+</p>
+
+<h3>Streaming export</h3>
+<p>
+  <code>StreamingResponse</code> over a server-side cursor, so memory stays at one fetch window
+  rather than the whole job. Records in no cluster are exported as
+  <code>UNRESOLVED_SINGLETON</code> — an export that silently omitted them would not reconcile
+  against the customer's input file.
+</p>
+
+<h3>Authentication</h3>
+<p>
+  A <strong>JWT</strong> (JSON Web Token) is a signed, tamper-evident bundle of claims. This one
+  carries <code>sub</code>, <code>tenant_id</code>, <code>role</code>, <code>exp</code>,
+  <code>aud</code>, <code>iss</code>. It is verified on every request, and the tenant id it
+  carries is the <em>only</em> source of tenancy anywhere in the request path.
+</p>
+<p>
+  Auth failures return an identical 401 for "expired" and "bad signature" — the difference is
+  useful to an attacker and not to a legitimate caller.
+</p>
+
+<h2>12. The frontend</h2>
+
+<table>
+  <tr><th>Concept</th><th>What it does here</th></tr>
+  <tr><td><strong>Next.js App Router</strong></td><td>File-system routing; folders under <code>app/</code> become URLs.</td></tr>
+  <tr><td><strong>Server vs Client Components</strong></td><td>Server components render on the server; <code>"use client"</code> marks components needing state or effects.</td></tr>
+  <tr><td><strong>Tailwind v4</strong></td><td>Utility CSS classes rather than separate stylesheets.</td></tr>
+  <tr><td><strong>Rewrites (proxy)</strong></td><td><code>/v1/*</code> is proxied to FastAPI so the browser sees one origin.</td></tr>
+</table>
+
+<div class="callout why">
+  <p><span class="tag why">Why the proxy</span> The backend installs no CORS middleware, so a
+  browser at <code>:3000</code> cannot call <code>:8000</code> directly — the request is blocked
+  before FastAPI sees it. Proxying through Next makes every call same-origin, and leaves CORS as
+  a production decision (an allow-list of real origins) rather than something loosened for
+  convenience.</p>
+</div>
+
+<div class="callout why">
+  <p><span class="tag why">Why XMLHttpRequest for upload</span> <code>fetch</code> cannot report
+  upload progress. For a file that may be hundreds of megabytes, a UI showing nothing between
+  "clicked" and "done" looks broken — and the user's instinct is to click again, which uploads
+  it twice.</p>
+</div>
+
+<h3>The review screens</h3>
+<p>
+  The queue table pages by the backend's opaque cursor. The resolution screen shows member
+  records side by side with disagreements highlighted <em>relative to the proposed master</em>,
+  because the question being answered is "should these collapse into <em>that</em> one".
+</p>
+
+<div class="callout trap">
+  <p><span class="tag trap">Trap</span> <code>PENDING_REVIEW</code> is a <em>cluster</em> status;
+  <code>AWAITING_REVIEW</code> is a <em>job</em> status. They describe the same moment from
+  opposite sides, and filtering clusters by <code>AWAITING_REVIEW</code> returns an empty page
+  rather than an error.</p>
+  <p>Also: scores arrive as JSON <strong>strings</strong> (<code>"0.842"</code>) because they are
+  SQL <code>NUMERIC</code>. Sorting them unparsed gives lexicographic order, where
+  <code>"0.9" &gt; "0.85"</code> is wrong.</p>
+</div>
+
+<h2>13. Testing strategy</h2>
+
+<table>
+  <tr><th>Layer</th><th>Approach</th></tr>
+  <tr><td>Unit (ML, helpers)</td><td>No database. Pure logic, deterministic fixtures.</td></tr>
+  <tr><td>Blocker</td><td>Mocked session, but statements compiled against the real PostgreSQL dialect so invalid SQL fails locally.</td></tr>
+  <tr><td>Matcher</td><td>Real Splink on in-process DuckDB — the production backend, not a stand-in.</td></tr>
+  <tr><td>API</td><td>Real FastAPI test client; auth boundary walked from the live OpenAPI schema.</td></tr>
+  <tr><td>Integration</td><td>Real Postgres, Redis, Celery, XGBoost, Splink in Docker.</td></tr>
+</table>
+
+<p>
+  <strong>242 tests.</strong> The integration suite is the one that earned its cost: it found the
+  missing <code>tenant_id</code> writes, the self-deadlock, and the fact that an unseeded
+  <code>reference_pincodes</code> table silently classifies every upload as
+  <code>Missing_Context</code> — producing a job that succeeds having resolved nothing.
+</p>
+
+<div class="callout why">
+  <p><span class="tag why">Principle</span> Tests assert <em>properties</em>, not snapshots —
+  "duplicates outrank non-duplicates", not "this pair scores 0.847". A snapshot test fails on
+  every dependency bump without anything being wrong.</p>
+</div>
+
+<h2>14. Glossary</h2>
+<table>
+  <tr><th>Term</th><th>Definition</th></tr>
+  <tr><td>Entity resolution</td><td>Deciding which records refer to the same real-world thing.</td></tr>
+  <tr><td>Blocking</td><td>Narrowing the candidate pair set so scoring is not quadratic.</td></tr>
+  <tr><td>Embedding</td><td>Text represented as a vector positioned by meaning.</td></tr>
+  <tr><td>HNSW</td><td>Graph index for fast approximate nearest-neighbour search.</td></tr>
+  <tr><td>Cosine distance</td><td><code>1 − cosine similarity</code>; the <code>&lt;=&gt;</code> operator.</td></tr>
+  <tr><td>RLS</td><td>Row-Level Security — per-row access policies enforced by Postgres.</td></tr>
+  <tr><td>GUC</td><td>Grand Unified Configuration — a Postgres session variable, here <code>app.tenant_id</code>.</td></tr>
+  <tr><td>Weak supervision</td><td>Training on noisy rules instead of hand-labelled data.</td></tr>
+  <tr><td>Labelling function</td><td>One imperfect rule that votes for a class or abstains.</td></tr>
+  <tr><td>Fellegi–Sunter</td><td>The probabilistic record-linkage model Splink implements.</td></tr>
+  <tr><td>m / u probability</td><td>Agreement rate among matches / among non-matches.</td></tr>
+  <tr><td>EM</td><td>Expectation-Maximisation — fits parameters without labels.</td></tr>
+  <tr><td>Idempotency</td><td>Running twice leaves the same state as running once.</td></tr>
+  <tr><td>Keyset pagination</td><td>Paging by a position in the data, not a row offset.</td></tr>
+  <tr><td>Token bucket</td><td>Rate limiter: tokens refill at a rate, each action spends one.</td></tr>
+  <tr><td>Dead letter</td><td>Where a task goes after exhausting its retries, so it can be diagnosed.</td></tr>
+  <tr><td>JWT</td><td>Signed token carrying identity claims.</td></tr>
+  <tr><td>202 Accepted</td><td>"Work queued", not "work finished".</td></tr>
+</table>
+
+<p class="meta">
+  ER-PLATFORM-001 · PostgreSQL 16 + pgvector · Redis 7 · FastAPI · Celery ·
+  XGBoost · sentence-transformers · Splink 4 (DuckDB) · Next.js 15 · Tailwind v4
+</p>
+
+</body>
+</html>

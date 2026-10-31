@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ER-PLATFORM-001 — Interview Prep</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root {
+    --ink: #16181d; --muted: #5b6472; --line: #d7dce3; --accent: #1f6feb;
+    --bg-soft: #f6f8fa; --warn: #9a6700; --good: #1a7f37; --bad: #b42318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 10.5pt/1.55 "Segoe UI", -apple-system, system-ui, sans-serif;
+    color: var(--ink); margin: 0; padding: 0;
+  }
+  h1 { font-size: 23pt; margin: 0 0 4pt; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 14pt; margin: 22pt 0 7pt; padding-bottom: 3pt;
+    border-bottom: 1.5pt solid var(--ink); letter-spacing: -0.2pt;
+    break-after: avoid;
+  }
+  h3 { font-size: 11.5pt; margin: 14pt 0 4pt; break-after: avoid; }
+  h4 { margin: 10pt 0 3pt; color: var(--muted);
+       text-transform: uppercase; letter-spacing: 0.4pt; font-size: 8.5pt; break-after: avoid; }
+  p, li { margin: 0 0 6pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 16pt; }
+  li { margin-bottom: 3pt; }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 9pt; }
+  code { background: var(--bg-soft); padding: 1pt 3pt; border-radius: 2pt; }
+  pre {
+    background: var(--bg-soft); border: 0.5pt solid var(--line); border-left: 2.5pt solid var(--accent);
+    padding: 7pt 9pt; border-radius: 3pt; overflow-x: auto; white-space: pre-wrap;
+    line-height: 1.45; break-inside: avoid;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 10pt; font-size: 9pt; break-inside: avoid; }
+  th, td { text-align: left; padding: 4pt 6pt; border-bottom: 0.5pt solid var(--line); vertical-align: top; }
+  th { background: var(--bg-soft); font-weight: 600; font-size: 8.5pt;
+       text-transform: uppercase; letter-spacing: 0.3pt; color: var(--muted); }
+  .lede { font-size: 11pt; color: var(--muted); margin-bottom: 14pt; }
+  .meta { font-size: 8.5pt; color: var(--muted); border-top: 0.5pt solid var(--line);
+          padding-top: 5pt; margin-top: 2pt; }
+  .callout {
+    background: var(--bg-soft); border: 0.5pt solid var(--line); border-radius: 3pt;
+    padding: 8pt 10pt; margin: 8pt 0 10pt; break-inside: avoid;
+  }
+  .callout.say  { border-left: 2.5pt solid var(--good); background: #f0fbf3; }
+  .callout.ask  { border-left: 2.5pt solid var(--warn); background: #fff9ec; }
+  .callout p:last-child, .callout ul:last-child, .callout ol:last-child { margin-bottom: 0; }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: 700; letter-spacing: 0.5pt;
+         text-transform: uppercase; padding: 1pt 4pt; border-radius: 2pt; vertical-align: 1.5pt; }
+  .tag.say  { background: #d7f5df; color: var(--good); }
+  .tag.ask  { background: #fff1c2; color: var(--warn); }
+  .tag.sev-high { background: #ffdcd8; color: var(--bad); }
+  .tag.sev-med  { background: #fff1c2; color: var(--warn); }
+  .tag.sev-low  { background: #e4e4e7; color: var(--muted); }
+  .story { border: 0.5pt solid var(--line); border-radius: 4pt; margin: 10pt 0 14pt; break-inside: avoid; overflow: hidden; }
+  .story-head { background: var(--bg-soft); padding: 7pt 10pt; border-bottom: 0.5pt solid var(--line); }
+  .story-head .n { font-size: 8pt; color: var(--muted); font-weight: 600; }
+  .story-head .t { font-size: 10.5pt; font-weight: 600; margin-top: 1pt; }
+  .story-body { padding: 8pt 10pt; }
+  .story-body dt { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4pt;
+                   color: var(--muted); margin-top: 6pt; }
+  .story-body dt:first-child { margin-top: 0; }
+  .story-body dd { margin: 2pt 0 0; }
+  .pagebreak { break-before: page; }
+  .small { font-size: 9pt; color: var(--muted); }
+  .num { font-family: "Cascadia Mono", Consolas, monospace; font-weight: 600; color: var(--accent); }
+  .qa { margin: 0 0 10pt; break-inside: avoid; }
+  .qa .q { font-weight: 600; margin-bottom: 2pt; }
+  .qa .q::before { content: "Q. "; color: var(--accent); }
+  .qa .a::before { content: "A. "; color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>ER-PLATFORM-001</h1>
+<p class="lede">Interview prep — the full stack, the real problems hit while building it, and prepared answers.</p>
+<p class="meta">
+  Multi-tenant entity resolution SaaS for Indian school records. Solo-built:
+  schema and RLS design, the full ML pipeline, Celery orchestration, the FastAPI
+  layer, and a Next.js frontend. All facts below (test counts, versions, migration
+  count) were re-verified against the running project on 2026-09-21, not
+  recalled from memory.
+</p>
+
+<h2>1. The 30-second answer</h2>
+<div class="callout say">
+  <p><span class="tag say">Say this</span>
+  "It's a multi-tenant SaaS platform that deduplicates Indian school records —
+  customers upload a CSV where the same school appears several times spelled
+  differently, and the system decides which rows are the same place. The hard
+  constraint was doing that without comparing every record to every other one,
+  which is quadratic at 50,000 rows, and doing it with hard tenant isolation
+  since multiple customers share one database. I built the schema and
+  row-level security, the ML pipeline — a cold-start classifier, embeddings,
+  vector blocking, probabilistic matching — the Celery orchestration, the
+  FastAPI layer, and a Next.js review UI. <span class="num">242</span> tests,
+  all passing, run against real Postgres/Redis/Celery containers, not mocks."</p>
+</div>
+
+<h2>2. Full technology inventory</h2>
+
+<h3>Backend / data</h3>
+<table>
+  <tr><th>Technology</th><th>Version</th><th>Role</th></tr>
+  <tr><td>Python</td><td>3.14.7</td><td>Runtime</td></tr>
+  <tr><td>FastAPI</td><td>0.141.1</td><td>API framework — async, request validation, OpenAPI</td></tr>
+  <tr><td>Pydantic v2</td><td>2.13</td><td>Request/response schemas, settings</td></tr>
+  <tr><td>SQLAlchemy 2.0</td><td>2.0.54</td><td>ORM — one async engine (API), one sync engine (Celery)</td></tr>
+  <tr><td>Alembic</td><td>1.20.0</td><td>Schema migrations, hand-written not autogenerated</td></tr>
+  <tr><td>psycopg 3</td><td>3.3.5</td><td>Postgres driver — same driver serves both engines</td></tr>
+  <tr><td>PostgreSQL</td><td>16</td><td>Primary store</td></tr>
+  <tr><td>pgvector</td><td>0.5.0 (client) / pg16 image</td><td>Vector column type + HNSW index</td></tr>
+  <tr><td>Redis</td><td>7.4</td><td>Celery broker, rate-limit token bucket</td></tr>
+  <tr><td>Celery</td><td>5.6.3</td><td>Distributed task queue, 9 queues</td></tr>
+  <tr><td>PyJWT</td><td>2.14.0</td><td>Token verification</td></tr>
+  <tr><td>httpx</td><td>0.28</td><td>Google Places client, test client</td></tr>
+  <tr><td>Docker Compose</td><td>—</td><td>Postgres + Redis for local dev</td></tr>
+</table>
+
+<h3>ML pipeline</h3>
+<table>
+  <tr><th>Technology</th><th>Version</th><th>Role</th></tr>
+  <tr><td>XGBoost</td><td>3.4.1</td><td>Ingestion classifier (Valid / Junk / Missing_Context)</td></tr>
+  <tr><td>sentence-transformers</td><td>6.0.1</td><td>Embedding model wrapper (pulls in PyTorch)</td></tr>
+  <tr><td>paraphrase-multilingual-mpnet-base-v2</td><td>pinned by revision</td><td>The embedding model itself — multilingual for Devanagari/transliterated text</td></tr>
+  <tr><td>Splink</td><td>4.0.17</td><td>Probabilistic record linkage (Fellegi–Sunter)</td></tr>
+  <tr><td>DuckDB</td><td>via Splink</td><td>In-process SQL engine Splink runs its comparisons on</td></tr>
+  <tr><td>pandas</td><td>3.0.5</td><td>Feature frames, batch processing</td></tr>
+  <tr><td>NumPy</td><td>2.5.3</td><td>Vector math, union-find, weighted voting</td></tr>
+  <tr><td>scikit-learn</td><td>—</td><td>Splink dependency</td></tr>
+</table>
+
+<h3>Frontend</h3>
+<table>
+  <tr><th>Technology</th><th>Version</th><th>Role</th></tr>
+  <tr><td>Next.js</td><td>15.5.25</td><td>App Router, server components, route handlers as an auth proxy</td></tr>
+  <tr><td>React</td><td>19.1.0</td><td>UI</td></tr>
+  <tr><td>TypeScript</td><td>^5</td><td>Type-checked client, hand-written API contract types</td></tr>
+  <tr><td>Tailwind CSS</td><td>v4</td><td>Styling — CSS-variable design tokens, dark mode via media query</td></tr>
+  <tr><td>jose</td><td>^6</td><td>Server-side JWT signing for the dev-token mock</td></tr>
+  <tr><td>Node.js</td><td>24.18.1</td><td>Runtime</td></tr>
+</table>
+
+<h3>Testing / tooling</h3>
+<table>
+  <tr><th>Technology</th><th>Role</th></tr>
+  <tr><td>pytest / pytest-asyncio</td><td>242 tests: unit, API, and Docker-backed integration</td></tr>
+  <tr><td>pytest-timeout</td><td>120s hard cap per test — added after a real deadlock hung a test 10+ minutes</td></tr>
+  <tr><td>ruff / mypy</td><td>Lint + strict type checking, both clean across the codebase</td></tr>
+  <tr><td>ESLint / tsc</td><td>Frontend equivalent, both clean</td></tr>
+  <tr><td>Headless Chrome</td><td>Rendered this and the architecture doc to PDF</td></tr>
+</table>
+
+<h2 class="pagebreak">3. Architecture, in one diagram</h2>
+<pre>CSV upload (202 Accepted, returns immediately)
+  │
+  ├─▶ INGEST     parse CSV in chunks, store rows verbatim as JSONB
+  ├─▶ CLASSIFY   XGBoost: Valid / Junk / Missing_Context (weak-supervision cold start)
+  ├─▶ EMBED      normalise text → 2×768-dim vectors per record (Valid rows only)
+  ├─▶ BLOCK      pgvector HNSW nearest-neighbour search → candidate pairs → clusters
+  ├─▶ MATCH      Splink Fellegi–Sunter scoring on every pair inside every cluster
+  └─▶ GATE       route by the tenant's own thresholds:
+        ≥ 0.950 → AUTO_MERGED   (no external call)
+        ≥ 0.750 → PENDING_API   (Google Places validation, cached + rate-limited)
+        &lt; 0.750 → PENDING_REVIEW (a human decides)</pre>
+
+<p>
+  Nine Celery queues, one per stage, independently scaled. Stages hand off
+  <em>through Postgres</em>, not through Redis payloads — a 50k-row job produces
+  roughly a million candidate pairs, and routing those through the broker would
+  turn it into a data channel it was never sized for. Postgres Row-Level
+  Security enforces tenant isolation independently of application code, so a
+  forgotten <code>WHERE tenant_id = ?</code> is a bug caught at the database, not
+  a breach.
+</p>
+
+<h2>4. War stories — real bugs, ready for "tell me about a hard problem"</h2>
+
+<p class="small">
+  Each of these is a genuine STAR answer: found under real load (mostly the
+  Docker-backed integration suite or a live click-through, not a mock), with a
+  root cause and a verified fix. Pick 2–3 depending on how technical the
+  interviewer is — the RLS one and the Windows event-loop one are the strongest
+  general-audience stories; the deadlock and the Splink calibration one are the
+  strongest for a backend-focused interviewer.
+</p>
+
+<div class="story">
+  <div class="story-head">
+    <div class="n">War story 1 <span class="tag sev-high">severity: high</span></div>
+    <div class="t">Row-Level Security caught a bug I didn't know I had — 5 of 6 write paths never set tenant_id</div>
+  </div>
+  <div class="story-body">
+    <dl>
+      <dt>Situation</dt>
+      <dd>I'd built two independent tenant-isolation layers on purpose: the
+      application always scopes queries by tenant, and Postgres RLS enforces
+      the same rule at the database level as a backstop. The policy has a
+      <code>WITH CHECK</code> clause, not just <code>USING</code> — it governs
+      what a query is allowed to <em>write</em>, not just what it can see.</dd>
+      <dt>Task</dt>
+      <dd>Run the first real end-to-end pipeline test against live Docker
+      containers instead of mocks.</dd>
+      <dt>Action</dt>
+      <dd>The very first insert failed with "new row violates row-level
+      security policy". I traced every write site in the codebase and found
+      five of six — jobs, school_records, clusters, cluster_members,
+      human_feedback — never set <code>tenant_id</code> explicitly. They
+      relied on the session being tenant-bound, which governs what you can
+      <em>see</em>, but the <code>WITH CHECK</code> clause requires the column
+      to be set correctly on the row itself.</dd>
+      <dt>Result</dt>
+      <dd>Fixed all five sites, then wrote an integration test that inserts
+      through the real API and confirms the row lands with the right tenant.
+      This would have made every single upload fail in production, and no
+      unit test would ever have caught it — you need a real Postgres
+      evaluating a real policy.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="story">
+  <div class="story-head">
+    <div class="n">War story 2 <span class="tag sev-high">severity: high</span></div>
+    <div class="t">A self-inflicted deadlock that hung a worker for 10+ minutes, with no error</div>
+  </div>
+  <div class="story-body">
+    <dl>
+      <dt>Situation</dt>
+      <dd>Every Celery stage wraps its work in a try/except that marks the
+      job FAILED on error, so a failure is always diagnosable from Postgres
+      alone, per the design requirement.</dd>
+      <dt>Task</dt>
+      <dd>The error handler opens a <em>second</em> database session to write
+      the failure — because the first session's transaction is about to roll
+      back, and writing inside it would roll the failure message back too.</dd>
+      <dt>Action</dt>
+      <dd>What I missed: the failing transaction still held a row lock on
+      that exact <code>jobs</code> row (from an earlier status update in the
+      same request). The second session tried to update the same row and
+      blocked on the lock. I caught it live with
+      <code>pg_stat_activity</code> — one session <code>idle in transaction</code>,
+      the other <code>waiting on Lock/transactionid</code> for over ten
+      minutes. Postgres's own deadlock detector never fired, because the first
+      session wasn't waiting on a lock at all — it was waiting on the client.
+      No cycle, no detection, just a permanent hang.</dd>
+      <dt>Result</dt>
+      <dd>Fixed by rolling back the failing transaction <em>before</em>
+      opening the second session. Added a hard <code>pytest-timeout</code> of
+      120 seconds to the whole test suite afterward, specifically so a
+      regression like this fails loud instead of hanging CI silently.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="story">
+  <div class="story-head">
+    <div class="n">War story 3 <span class="tag sev-high">severity: high</span></div>
+    <div class="t">Windows made the entire async API non-functional, and no test caught it</div>
+  </div>
+  <div class="story-body">
+    <dl>
+      <dt>Situation</dt>
+      <dd>242 tests passing, mypy and ruff clean, backend "done." First real
+      HTTP request from the frontend to the API — every database-backed route
+      returned 500.</dd>
+      <dt>Task</dt>
+      <dd>Diagnose <code>psycopg.InterfaceError: Psycopg cannot use the
+      'ProactorEventLoop' to run in async mode</code>.</dd>
+      <dt>Action</dt>
+      <dd>Uvicorn hardcodes <code>ProactorEventLoop</code> on Windows, and
+      psycopg's async mode refuses to run on it. My first fix — setting the
+      asyncio event-loop <em>policy</em> in the app module — silently did
+      nothing, because uvicorn passes an explicit <code>loop_factory</code> to
+      <code>asyncio.run()</code>, which bypasses policies entirely. The
+      working fix is a CLI flag: <code>--loop asyncio:SelectorEventLoop</code>,
+      which is uvicorn's own escape hatch and happens to be the default
+      behaviour on Linux/macOS anyway, so one command works everywhere.</dd>
+      <dt>Result</dt>
+      <dd>No test suite would have caught this without cost: the unit tests
+      exercise the auth boundary only (never touching the DB), and the
+      integration tests use Celery's <em>sync</em> engine. Only a real HTTP
+      request through the async engine exposes it — which is exactly why I
+      manually drove the app through the browser-equivalent flow before
+      calling it done, rather than stopping at green tests.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="story">
+  <div class="story-head">
+    <div class="n">War story 4 <span class="tag sev-med">severity: medium — correctness</span></div>
+    <div class="t">A probabilistic matcher that ran clean and was silently useless</div>
+  </div>
+  <div class="story-body">
+    <dl>
+      <dt>Situation</dt>
+      <dd>Splink's matcher needs three fitting steps: estimate <code>u</code>
+      (agreement rate among non-matches), estimate <code>m</code> (agreement
+      rate among matches) by Expectation-Maximisation, and estimate the prior
+      probability that two random records match at all.</dd>
+      <dt>Task</dt>
+      <dd>I implemented the first two and skipped the third as an apparent
+      refinement.</dd>
+      <dt>Action</dt>
+      <dd>The model ran with no errors and ranked pairs in the right order —
+      but genuine duplicates scored <span class="num">0.043</span> and
+      non-duplicates scored <span class="num">0.000</span>. Since
+      auto-merge triggers at 0.950, nothing would ever have auto-merged,
+      ever, on any data. This is the dangerous kind of bug: it produces
+      plausible-looking, silently wrong output rather than an error.</dd>
+      <dt>Result</dt>
+      <dd>Adding the missing prior-estimation step moved genuine duplicates
+      to 0.87–0.91. Lesson I take into interviews: a model that runs without
+      exceptions is not a model that is correct — test the actual output
+      values, not just that the pipeline completes.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="story">
+  <div class="story-head">
+    <div class="n">War story 5 <span class="tag sev-med">severity: medium — data integrity</span></div>
+    <div class="t">The multilingual model was chosen for Devanagari text, then a regex silently destroyed it</div>
+  </div>
+  <div class="story-body">
+    <dl>
+      <dt>Situation</dt>
+      <dd>The embedding model was deliberately chosen to be multilingual,
+      because Indian school names arrive transliterated inconsistently and
+      sometimes not transliterated at all.</dd>
+      <dt>Task</dt>
+      <dd>Write the text normaliser that runs before embedding — strip
+      punctuation, expand abbreviations.</dd>
+      <dt>Action</dt>
+      <dd>My punctuation stripper kept "word characters" via
+      <code>\w</code> and discarded the rest. Python's <code>\w</code> does
+      not count Devanagari combining vowel marks as word characters, so
+      <code>केंद्रीय विद्यालय</code> came back as a row of bare consonants —
+      the exact text the multilingual model was chosen to handle, destroyed
+      before it ever reached the model.</dd>
+      <dt>Result</dt>
+      <dd>Fixed by inverting the logic — <em>name</em> the punctuation to
+      remove instead of naming the characters to keep. Caught by a test that
+      asserted every Devanagari code point in the input survived
+      normalisation, written specifically because "the model is multilingual"
+      is a claim that needs its own test, not an assumption that falls out of
+      the classifier tests passing.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="story pagebreak">
+  <div class="story-head">
+    <div class="n">War story 6 <span class="tag sev-med">severity: medium — frontend</span></div>
+    <div class="t">A feature that looked finished and never worked once, because of how browsers navigate</div>
+  </div>
+  <div class="story-body">
+    <dl>
+      <dt>Situation</dt>
+      <dd>The CSV export button was a plain <code>&lt;a href="/v1/jobs/{id}/export"&gt;</code>,
+      deliberately not a fetch call — the reasoning being that a real browser
+      navigation streams a 50,000-row file without ever buffering it in JS
+      memory, which is correct.</dd>
+      <dt>Task</dt>
+      <dd>What that reasoning missed: a top-level browser navigation sends no
+      <code>Authorization</code> header, and the backend route requires a
+      bearer token.</dd>
+      <dt>Action</dt>
+      <dd>The button 401'd every single time — not intermittently. The
+      steward's review page was replaced by the raw JSON body
+      <code>{"detail":"Missing bearer token"}</code>, discarding their queue
+      position. This was caught by an adversarial code-review pass I ran
+      specifically to find issues like this — a reviewer traced the auth
+      chain through four separate attempts to refute the claim and confirmed
+      it every time.</dd>
+      <dt>Result</dt>
+      <dd>Fixed with a Next.js route handler that attaches the token
+      server-side and pipes the response stream straight through — same
+      memory property, the missing header fixed. Verified live: 401 before,
+      200 with a real streaming CSV after.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="story">
+  <div class="story-head">
+    <div class="n">War story 7 <span class="tag sev-low">severity: low but memorable</span></div>
+    <div class="t">"It's up" was the wrong question — an HTTP 200 that meant nothing</div>
+  </div>
+  <div class="story-body">
+    <dl>
+      <dt>Situation</dt>
+      <dd>I ran <code>next build</code> twice while <code>next dev</code> was
+      live. Next.js shares the <code>.next</code> build directory between the
+      two by default.</dd>
+      <dt>Task</dt>
+      <dd>The production build overwrote the dev server's chunk manifests
+      mid-flight. The user reported the page "not opening."</dd>
+      <dt>Action</dt>
+      <dd>Every server-side check passed: the port was listening, server-side
+      rendering returned HTTP 200 with valid HTML, the backend health check
+      was green. The actual failure was invisible to <code>curl</code>: the
+      browser was told to fetch <code>main-app.js</code>, the React runtime
+      itself, and got a 404. Blank page, forever, with every "is it up?"
+      check lying.</dd>
+      <dt>Result</dt>
+      <dd>Fixed by giving builds a separate output directory
+      (<code>.next-build</code>) so the collision is structurally impossible,
+      then proved the fix by deliberately rerunning the exact sequence that
+      broke it. The lesson: for any client-rendered app, checking that HTML
+      came back is not checking that the app works — check that its JS
+      assets actually returned 200 too.</dd>
+    </dl>
+  </div>
+</div>
+
+<h2 class="pagebreak">5. Shorter bugs worth having ready</h2>
+<table>
+  <tr><th>Bug</th><th>One-line cause</th><th>One-line fix</th></tr>
+  <tr>
+    <td>Classifier mislabeled all-empty rows</td>
+    <td>Missing-field heuristics outvoted junk heuristics on sheer count of blank fields</td>
+    <td>Gated the "missing context" rules on the row having a usable name first</td>
+  </tr>
+  <tr>
+    <td>XGBoost crashed on a 2-class cold start</td>
+    <td><code>multi:softprob</code> needs sklearn to infer &gt;2 classes; a tenant's first batch can lack one class entirely</td>
+    <td>Pick the objective at fit time based on classes actually present</td>
+  </tr>
+  <tr>
+    <td>pgvector + RLS "silent recall loss"</td>
+    <td>HNSW approximates <em>before</em> the tenant filter applies, so a crowded foreign tenant can starve genuine neighbours with zero error</td>
+    <td>Over-fetch (<code>LIMIT top_k × oversample</code>) + raise <code>hnsw.ef_search</code>; proven with an integration test that places 300 foreign rows nearer the probe than any real neighbour</td>
+  </tr>
+  <tr>
+    <td>Keyset pagination broke on page 2 only</td>
+    <td><code>(a, b) &gt; (c, d)</code> on SQLAlchemy columns is a Python tuple comparison, not SQL — it evaluates <code>a == c</code> for truthiness and raises</td>
+    <td>Use SQLAlchemy's <code>tuple_()</code> for a real row-value comparison</td>
+  </tr>
+  <tr>
+    <td><code>autoretry_for=(Exception,)</code> retried permanent errors</td>
+    <td>A missing file was retried 3 times, and each retry reported a different, misleading cause once the job was already FAILED</td>
+    <td>Replaced with an allowlist of genuinely transient exceptions (connection drops, timeouts)</td>
+  </tr>
+  <tr>
+    <td>A job's status machine could fail on its own success</td>
+    <td>A stray re-dispatch of a finished pipeline hit "job already resolved" and reported it as a hard failure, marking a healthy job FAILED</td>
+    <td>Distinguished "stale/already-done" from "illegal" as separate exception types with separate handling</td>
+  </tr>
+  <tr>
+    <td>Wrong DB credentials blocked everything at the start</td>
+    <td>A stray <code>.env</code> pointed at <code>postgres/postgres</code> instead of the actual provisioned role/database</td>
+    <td>Verified live against the container with <code>docker inspect</code> instead of trusting the file; deleted the stray file</td>
+  </tr>
+</table>
+
+<h2>6. Design decisions an interviewer will probe</h2>
+
+<div class="qa">
+  <p class="q">Why Postgres RLS instead of just filtering every query in application code?</p>
+  <p class="a">Defense in depth. NFR was explicit: a single forgotten <code>WHERE tenant_id = ?</code> must not be a data breach. Application-level filtering is still the primary layer — RLS is the backstop that turns "someone missed a filter" into "the database rejected the write," which is exactly what happened in War Story 1.</p>
+</div>
+<div class="qa">
+  <p class="q">Why blocking before matching, instead of scoring every pair?</p>
+  <p class="a">Quadratic cost. 50,000 rows is 1.25 billion pairs. Blocking uses cheap vector similarity to cut that down to a few thousand plausible pairs before the expensive probabilistic scorer ever runs.</p>
+</div>
+<div class="qa">
+  <p class="q">Why weak supervision for the classifier instead of collecting labels first?</p>
+  <p class="a">Cold start — a brand-new tenant has zero labelled data on day one. Multiple cheap heuristic rules vote, and rows where they disagree are deliberately excluded from training rather than guessed at; those are exactly the rows that should go to a human first.</p>
+</div>
+<div class="qa">
+  <p class="q">Why is the confidence gate three bands instead of a single threshold?</p>
+  <p class="a">Cost and trust calibration. High confidence auto-merges for free. Mid-confidence pays for one external validation call rather than either auto-merging on a shaky score or burning a human reviewer's time on something a cheap API call could settle. Low confidence always goes to a human — the system never guesses on a case it isn't sure about.</p>
+</div>
+<div class="qa">
+  <p class="q">Why hand-write Alembic migrations instead of autogenerating them?</p>
+  <p class="a">Two things autogenerate doesn't round-trip reliably: HNSW indexes with operator classes and build parameters, and the RLS policies themselves, which are security-critical enough to want reviewed as literal SQL rather than trusted to a diff tool.</p>
+</div>
+<div class="qa">
+  <p class="q">Why does the frontend proxy through Next.js instead of calling FastAPI directly?</p>
+  <p class="a">The backend has no CORS middleware, so a direct browser call from a different origin is blocked before FastAPI ever sees it. Proxying makes every call same-origin, and leaves adding real CORS as a deliberate production decision — an allow-list of real origins — rather than something loosened for local convenience.</p>
+</div>
+
+<h2>7. Numbers worth having memorized</h2>
+<table>
+  <tr><td><strong>242</strong></td><td>tests, all passing — unit, API-boundary, and Docker-backed integration</td></tr>
+  <tr><td><strong>4</strong></td><td>Alembic migrations, hand-written, RLS-guarded</td></tr>
+  <tr><td><strong>9</strong></td><td>Celery queues, independently scaled and rate-limited</td></tr>
+  <tr><td><strong>2 × 768</strong></td><td>embedding dimensions per record (name + address, independently, per FR-03)</td></tr>
+  <tr><td><strong>0.950 / 0.750</strong></td><td>per-tenant auto-merge / API-validation confidence thresholds</td></tr>
+  <tr><td><strong>~1.25B → ~thousands</strong></td><td>pairs before/after blocking, on a 50,000-row job</td></tr>
+  <tr><td><strong>10+ min</strong></td><td>the self-deadlock hung a worker before I diagnosed it live via <code>pg_stat_activity</code></td></tr>
+  <tr><td><strong>0.043 → 0.87–0.91</strong></td><td>true-duplicate match score before/after fixing the Splink calibration bug</td></tr>
+</table>
+
+<h2>8. Questions to ask them back</h2>
+<div class="callout ask">
+  <p><span class="tag ask">Turn it around</span> Good, genuine questions — not just "wrap-up" filler:</p>
+  <ul>
+    <li>"How do you handle multi-tenant data isolation — is it RLS, separate schemas, separate databases per tenant?"</li>
+    <li>"What's your team's answer to 'the pipeline ran with no errors but the output was wrong' — do you have output-value assertions in CI, or mostly exception-based tests?"</li>
+    <li>"How do you catch platform-specific bugs like the Windows event-loop one — do you run CI on more than one OS, or is dev/prod parity enough?"</li>
+  </ul>
+</div>
+
+<h2>9. If they ask what you'd do differently</h2>
+<div class="callout say">
+  <p><span class="tag say">Honest answer, prepared</span>
+  "Three things. First, I'd write the output-value assertions — not just
+  'does it run' — earlier for the ML stages; the Splink calibration bug should
+  have been caught by a test that checks a known duplicate scores above some
+  floor, not just by manual inspection. Second, I'd stand up the Docker
+  integration suite before writing five write-paths that forgot
+  <code>tenant_id</code>, not after — the sooner you're testing against a real
+  database, the fewer of these compound. Third, the mid-confidence Google
+  Places validation band is routing logic only; the actual external call
+  behind it is unimplemented — that's the most honest gap in the project."</p>
+</div>
+
+<p class="meta">
+  ER-PLATFORM-001 · facts verified live on 2026-09-21 · 242/242 tests passing ·
+  mypy/ruff/tsc/eslint clean
+</p>
+
+</body>
+</html>

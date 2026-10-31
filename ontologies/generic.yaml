@@ -1,0 +1,34 @@
+# Domain-neutral standardisation for anything that is neither a school nor a
+# health facility: Indian geography (states, renamed districts, PINs) and
+# address abbreviations only. No name abbreviations, no natural keys, no
+# enrichment — those are domain knowledge, and guessing them here would
+# rewrite names the domain never meant.
+name: generic
+label: Other / custom
+extends: _india
+description: Any organisation. Geography and addresses are standardised; names are left as written.
+
+fields:
+  name: [name, organisationname, organizationname, orgname, entityname, institutionname, businessname]
+  address: [address, addressline1, streetaddress, location]
+
+text:
+  address_abbreviations:
+    st: street
+    rd: road
+    nr: near
+    opp: opposite
+    vpo: village and post office
+    po: post office
+    teh: tehsil
+    distt: district
+    dist: district
+
+generic_name_tokens: [the, of, and, for, at, in, pvt, private, ltd, limited, llp, co, company]
+
+enrichment:
+  registries: []
+  serp:
+    enabled: false
+    query: '"{name}" {district} {state}'
+    fields: [email, phone, website]

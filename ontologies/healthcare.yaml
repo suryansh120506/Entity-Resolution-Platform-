@@ -1,0 +1,100 @@
+# Public and private health facilities. Same engine, different meanings:
+# here "med" is "medical" (in education it is "medium"), "sc" is a sub
+# centre, and "kv" means nothing at all.
+name: healthcare
+label: Healthcare
+extends: _india
+description: Hospitals, health centres and clinics.
+
+fields:
+  name: [name, facilityname, hospitalname, healthfacilityname, clinicname, institutionname]
+  address: [address, addressline1, facilityaddress, location]
+
+text:
+  abbreviations:
+    govt: government
+    gov: government
+    phc: primary health centre
+    uphc: urban primary health centre
+    chc: community health centre
+    sc: sub centre
+    hwc: health and wellness centre
+    ab hwc: ayushman bharat health and wellness centre
+    sdh: sub district hospital
+    dh: district hospital
+    mch: medical college hospital
+    gh: general hospital
+    hosp: hospital
+    med: medical
+    coll: college
+    multi spl: multi speciality
+    spl: speciality
+    nursing hm: nursing home
+    pvt: private
+    ltd: limited
+    no: number
+    center: centre
+  name_abbreviations:
+    st: saint
+  address_abbreviations:
+    st: street
+    rd: road
+    nr: near
+    opp: opposite
+
+generic_name_tokens: [
+  hospital, hospitals, clinic, clinics, centre, health, primary, community, urban,
+  sub, district, general, medical, college, nursing, home, speciality, multi,
+  super, care, wellness, and, ayushman, bharat, government, private, limited,
+  the, of, for, at, in, number, new, shri, sri, saint, research, institute,
+  sciences,
+]
+
+attributes:
+  facility_level:
+    from: name
+    values:
+      sub centre: sub_centre
+      primary health centre: phc
+      community health centre: chc
+      sub district hospital: sdh
+      district hospital: district_hospital
+      medical college: medical_college
+    on_conflict: first
+
+# No natural keys yet: confirm the published format of the facility
+# identifier you hold (for example a Health Facility Registry ID) before
+# adding a pattern here, because a guessed pattern produces confident wrong keys.
+natural_keys: {}
+
+enrichment:
+  registries: []
+  # Off for the reason given in education.yaml: Tier 3 enriches each
+  # resolved facility once instead of every raw row.
+  serp:
+    enabled: false
+    query: '"{name}" {district} {state} hospital contact'
+    fields: [email, phone, website]
+
+# Client export headers and capitals.
+display:
+  entity_label: Facility
+  keep_upper: [phc, chc, uphc, esi, esic, aiims, icu, ipd, opd, ent, nabh, cghs]
+
+triage:
+  query: '"{name}" {address} {district} {state}'
+  max_results: 3
+
+golden_enrichment:
+  query: '"{name}" {district} {state} hospital'
+  max_results: 5
+enrichment_targets:
+  - website
+  - phone
+  - email
+  - medical_superintendent_name
+  - key: bed_count
+    type: number
+    description: "number of inpatient beds"
+  - key: facility_type
+    description: "e.g. district hospital, community health centre, primary health centre, private multispeciality"

@@ -1,0 +1,75 @@
+# Companies and their offices. Same engine again: here "co" is "company"
+# and "ltd" is "limited", and Tier 3 looks for a CEO and revenue, not a
+# principal and a board.
+name: corporate
+label: Companies
+extends: _india
+description: Companies, firms and their branch offices.
+
+fields:
+  name: [name, companyname, businessname, firmname, organisationname, organizationname, entityname]
+  address: [address, addressline1, registeredaddress, officeaddress, streetaddress, location]
+
+text:
+  name_abbreviations:
+    pvt: private
+    ltd: limited
+    co: company
+    corp: corporation
+    inc: incorporated
+    intl: international
+    mfg: manufacturing
+    engg: engineering
+    tech: technologies
+    svcs: services
+  address_abbreviations:
+    st: street
+    rd: road
+    nr: near
+    opp: opposite
+    blvd: boulevard
+    bldg: building
+    flr: floor
+    distt: district
+    dist: district
+
+generic_name_tokens: [
+  the, of, and, for, at, in, india, indian,
+  private, limited, llp, company, corporation, incorporated, group, holdings,
+  industries, enterprises, international, global, technologies, solutions,
+  services, systems, ventures, traders, trading, manufacturing, engineering,
+]
+
+# No natural keys yet. A CIN or GSTIN would make a strong identity, but a
+# key forces merges, so add one only with its pattern checked against your
+# own data first.
+natural_keys: {}
+
+enrichment:
+  registries: []
+
+# Client export headers and capitals.
+display:
+  entity_label: Company
+  keep_upper: [llp, opc, gst, gstin, cin, it, bpo, ceo, hr]
+
+triage:
+  query: '"{name}" {address} {district} {state}'
+  max_results: 3
+
+golden_enrichment:
+  query: '"{name}" {district} {state} company'
+  max_results: 5
+enrichment_targets:
+  - ceo_name
+  - website
+  - phone
+  - email
+  - key: industry
+    description: "the company's main line of business"
+  - key: revenue
+    type: number
+    description: "annual revenue or turnover as written, with its currency and year if given"
+  - key: employee_count
+    type: number
+    description: "number of employees"

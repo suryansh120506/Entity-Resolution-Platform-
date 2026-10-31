@@ -1,0 +1,73 @@
+# =============================================================================
+# ER-PLATFORM-001 · Step 1 — data-plane infrastructure only.
+#
+# Scope note: this file provisions the two stateful backing services the
+# platform depends on (SAD FIG 3.1) and nothing else. The FastAPI deployable
+# and the per-queue Celery worker pools (TRD 2.6 / SAD 3.8) are separate
+# deployables by design and land in a later step — SAD 3.8 is explicit that
+# "nothing about this architecture assumes they ever share a process".
+#
+#   postgres : PostgreSQL 16 + pgvector — primary store (RLS-enforced, FIG 2.8)
+#              AND the task queue (task_queue, FOR UPDATE SKIP LOCKED; see
+#              migration 0006). Redis is gone: one stateful service, no broker.
+# =============================================================================
+
+name: er-platform
+
+services:
+  postgres:
+    # pgvector is compiled in; pinned to a digest-stable minor so an HNSW index
+    # built today is not rebuilt by a surprise pgvector bump (cf. TRD 2.2's
+    # "pin by revision, not name" principle applied to infrastructure).
+    image: pgvector/pgvector:pg16
+    container_name: er-postgres
+    restart: unless-stopped
+    # Docker's default /dev/shm is 64 MB. Parallel query and parallel index
+    # builds allocate dynamic shared memory there and fail with "could not
+    # resize shared memory segment" once a job is large. Takes effect the next
+    # time the container is recreated (`docker compose up -d`).
+    shm_size: 512mb
+    environment:
+      # NOTE: POSTGRES_USER is the *owner* role. It runs DDL/migrations.
+      # It is deliberately NOT the role the API and workers connect as —
+      # see docker/postgres/initdb/002_app_role.sh and TRD NFR-02.
+      POSTGRES_USER: ${POSTGRES_USER:-er_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-er_owner_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-entity_resolution}
+      # Consumed by 002_app_role.sh to provision the runtime (non-owner) role.
+      APP_DB_ROLE: ${APP_DB_ROLE:-er_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-er_app_dev_pw}
+      PLATFORM_DB_ROLE: ${PLATFORM_DB_ROLE:-er_platform}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:-er_platform_dev_pw}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      # HNSW index builds are memory-hungry; the default 64MB makes a
+      # 50k-row job's index build (NFR-01) spill to disk unnecessarily.
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - work_mem=32MB
+      - -c
+      - max_connections=200
+      # Surface slow pipeline queries during development.
+      - -c
+      - log_min_duration_statement=500
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once, on first init of an empty data volume only.
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-er_owner} -d ${POSTGRES_DB:-entity_resolution}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+volumes:
+  pgdata:
+    name: er-platform-pgdata

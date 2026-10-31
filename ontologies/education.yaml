@@ -1,0 +1,234 @@
+# Schools and colleges. Ported from the rules that used to be hard-coded in
+# app/ml_pipeline/{fields.py, embedding/encoder.py, matching/name_gate.py}.
+name: education
+label: Education
+extends: _india
+description: Schools, colleges and coaching institutes.
+
+fields:
+  name: [name, schoolname, institutionname, institutename, school, collegename]
+  address: [address, addressline1, streetaddress, location, schooladdress]
+
+text:
+  # Whole-token / whole-phrase expansions, applied to a fixed point
+  # ("kv" -> "kendriya vidyalaya" -> "kendriya school").
+  abbreviations:
+    govt: government
+    gov: government
+    gvt: government
+    mpl: municipal
+    mun: municipal
+    zp: zilla parishad
+    sr sec: senior secondary
+    srsec: senior secondary
+    hr sec: higher secondary
+    hrsec: higher secondary
+    hs: high school
+    hss: higher secondary school
+    gsss: government senior secondary school
+    ghss: government higher secondary school
+    gps: government primary school
+    ps: primary school
+    ups: upper primary school
+    pu: pre university
+    sr: senior
+    jr: junior
+    pry: primary
+    sec: secondary
+    vidyalaya: school
+    vidyalay: school
+    vidhyalaya: school
+    vidya mandir: school
+    vidyamandir: school
+    shikshan sanstha: school
+    pathshala: school
+    patshala: school
+    shala: school
+    madrasa: school
+    madrassa: school
+    madarsa: school
+    # Network names: only meaningful in this domain. "kv" in a hospital
+    # export is not Kendriya Vidyalaya.
+    kv: kendriya vidyalaya
+    jnv: jawahar navodaya vidyalaya
+    dps: delhi public school
+    dav: dayanand anglo vedic
+    no: number
+    eng: english
+    # "medium" as in "English medium". In healthcare.yaml, med -> medical.
+    med: medium
+    co ed: co educational
+    coed: co educational
+    int: international
+    pub: public
+    conv: convent
+    acad: academy
+    inst: institute
+  # Name-only: "st" is "saint" in "St. Josephs" but "street" in an address.
+  name_abbreviations:
+    st: saint
+  address_abbreviations:
+    st: street
+    rd: road
+    nr: near
+    opp: opposite
+    vpo: village and post office
+    po: post office
+    teh: tehsil
+    distt: district
+    dist: district
+
+# Words that say what kind of place it is, not which one. Removed to form
+# `name_distinctive`, the field that actually identifies the school.
+generic_name_tokens: [
+  school, schools, college, academy, institute, institution, university, gurukul,
+  kendra, niketan, sadan, mandir, ashram, bhavan, bhawan, centre, center,
+  senior, secondary, higher, high, primary, middle, upper, junior, elementary,
+  inter, intermediate, pre, nursery, kindergarten, basic,
+  government, public, private, model, convent, national, central, international,
+  global, english, hindi, medium, residential, boarding, day, co, educational,
+  composite, adarsh, kendriya, navodaya, jawahar, sarvodaya, rajkiya, uchch,
+  uchcha, madhyamik, prathmik, shiksha, education, society, trust, mission,
+  foundation, the, of, and, for, at, in, number, new, shri, sri, smt, saint,
+]
+
+attributes:
+  gender:
+    from: name
+    values:
+      girls: female
+      girl: female
+      women: female
+      womens: female
+      ladies: female
+      mahila: female
+      kanya: female
+      balika: female
+      boys: male
+      boy: male
+      men: male
+      mens: male
+      balak: male
+    # A name carrying both ("boys and girls school") is co-educational.
+    on_conflict: mixed
+  kind:
+    from: name
+    values:
+      school: school
+      college: college
+      mahavidyalaya: college
+      university: college
+      classes: coaching
+      coaching: coaching
+      tuition: coaching
+    on_conflict: first
+  branch_number:
+    from: name
+    # Runs on normalised text, where "no." has already become "number".
+    pattern: '\b(?:number|branch)\s*(\d{1,3})\b'
+
+natural_keys:
+  udise_code:
+    # UDISE+ school code: 11 digits, state(2) district(2) block(2) ...
+    headers: [udise, udisecode, udiseno, udiseplus, udisepluscode]
+    pattern: '\d{11}'
+    context: '(?i)\budise\s*(?:\+|plus)?\s*(?:code|no|number)?\s*[:#.-]?\s*(\d{11})\b'
+    validate:
+      length: 11
+      prefix_range: [1, 38]
+  cbse_affiliation_no:
+    # Requires a header or an explicit "affiliation no" label: a bare six
+    # or seven digit number is as likely a PIN or a phone fragment.
+    headers: [affiliationno, affiliationnumber, cbseaffiliationno, cbseaffno, affno]
+    pattern: '\d{6,7}'
+    context: '(?i)\b(?:cbse\s*)?aff(?:iliation)?\.?\s*(?:code|no|number)?\s*[:#.-]?\s*(\d{6,7})\b'
+    # Checked against the CBSE registry (SARAS) on a real export: the file's
+    # "affiliationno" was unique on all 51,665 rows, including coaching
+    # centres and state-board schools, disagreed between records of the same
+    # school in 2,059 of 2,060 auto-merged groups, and did not match the
+    # registry (Shiv Nadar School Gurugram: file 200427, registry 531193).
+    # The column is a row id, not a CBSE number. It still identifies rows
+    # within the upload, but the client export shows only a number found on
+    # the web (see enrichment_targets) and passes the uploaded column through
+    # under its own name.
+    trust_file: false
+
+# Stable identity (app/ontology/identity.py): UDISE first, it is the national
+# school registry key; a CBSE number only identifies affiliated schools.
+identity:
+  keys: [udise_code, cbse_affiliation_no]
+  force_merge_on_key: true
+
+enrichment:
+  # Registry adapters are declared here, not in code. None ship enabled:
+  # each needs its endpoint and selectors verified against the live site
+  # and its terms of use before it is switched on.
+  registries: []
+  # Per-record SERP enrichment is off: it searched every raw key (51k for a
+  # full export, about a day of DDGS at 2 s per call) and held the one
+  # enrichment slot that triage needs. Tier 3 below searches once per
+  # resolved golden record instead.
+  serp:
+    enabled: false
+    query: '"{name}" {district} {state} school principal contact'
+    fields: [principal_name, email, phone, website]
+
+# Display names (the Gold export's `name_standardized`): abbreviations above
+# are expanded ("sr sec" -> "senior secondary"), but these are matching-only
+# synonym collapses. They make "Vidya Mandir" and "Vidyalaya" compare equal to
+# "School", and must not rewrite the name a golden record shows.
+display:
+  # Client export: "School Name", "UDISE Code", "Affiliation Number".
+  entity_label: School
+  key_labels:
+    udise_code: UDISE Code
+    cbse_affiliation_no: Affiliation Number
+  # Kept in capitals when values are title-cased for the client export.
+  keep_upper: [cbse, icse, isc, igcse, ib, dav, kv, kvs, jnv, udise, iti, ncert, scert]
+  keep_as_written:
+    - vidyalaya
+    - vidyalay
+    - vidhyalaya
+    - vidya mandir
+    - vidyamandir
+    - shikshan sanstha
+    - pathshala
+    - patshala
+    - shala
+    - madrasa
+    - madrassa
+    - madarsa
+
+# Tier 2: when the matcher is unsure (0.80-0.95, or a suspected chain), each
+# record is searched and an LLM reads the snippets: same school or not?
+triage:
+  query: '"{name}" {address} {district} {state}'
+  max_results: 3
+  max_members_checked: 4
+
+# Tier 3: what to find on the web for every resolved school. Each value must
+# appear verbatim in a snippet that also names the school, or it is dropped.
+golden_enrichment:
+  query: '"{name}" {district} {state} school'
+  max_results: 5
+enrichment_targets:
+  # Read by the LLM from the snippets that name the school.
+  - principal_name
+  - website
+  - phone
+  - email
+  # Read by pattern, with no model call: closed-form values, taken from the
+  # match nearest the school's own name, in a snippet that also names its place.
+  - key: board
+    description: "examination board the school is affiliated to"
+    pattern: '\b(CBSE|ICSE|ISC|CISCE|IGCSE|NIOS)\b'
+  - key: established_year
+    type: number
+    description: "four-digit year the school was founded"
+    pattern: '(?i)\b(?:established|estd?\.?|founded|since)\s*(?:in|on|:|-)?\s*((?:18|19|20)\d{2})\b'
+  # The same key as natural_keys.cbse_affiliation_no: this verified number is
+  # what the client export shows under "Affiliation Number".
+  - key: cbse_affiliation_no
+    type: number
+    description: "CBSE affiliation number"
+    pattern: '(?i)\baff(?:iliation|\.)?\s*(?:code|no\.?|number)?\s*[:#.\-]?\s*(\d{6,7})\b'

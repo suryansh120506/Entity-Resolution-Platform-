@@ -1,0 +1,123 @@
+[project]
+name = "er-platform"
+version = "0.1.0"
+description = "Multi-tenant entity resolution & record linkage platform (ER-PLATFORM-001)"
+requires-python = ">=3.11"
+
+# Base install = API + database foundation only.
+# SAD 3.2 is explicit that FastAPI "never imports pandas, torch, or xgboost in
+# a request path" — so those are not base dependencies. They live in the [ml]
+# extra, installed into the worker image only. Keeping them out of the base
+# set makes that rule enforceable by packaging, not just by review.
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "sqlalchemy>=2.0.36",
+  "alembic>=1.14",
+  # psycopg 3 gives us one driver for both the API's async engine and the
+  # workers' sync engine — no asyncpg/psycopg2 split to keep in sync.
+  "psycopg[binary,pool]>=3.2",
+  "pgvector>=0.3.6",
+  "pyjwt>=2.10",
+  "python-json-logger>=2.0",
+  # Multipart upload parsing for POST /v1/jobs, and the enrichment HTTP client.
+  "httpx>=0.28",
+  "python-multipart>=0.0.20",
+  # Ontology files (ontologies/*.yaml). The API validates the requested
+  # ontology at upload, so this is base, not [ml].
+  "pyyaml>=6.0",
+  # S3-compatible object storage (Cloudflare R2 / S3): the API presigns
+  # direct uploads, the ingest worker downloads them.
+  "boto3>=1.34",
+  # scripts/seed_pincodes.py's CLI. Small and dependency-free enough not to
+  # need its own extra; it does not pull in anything SAD 3.2 keeps out of the
+  # API's request path.
+  "click>=8.1",
+]
+
+[project.optional-dependencies]
+# Worker-image-only. Not importable from the API process by construction.
+ml = [
+  "pandas>=2.2",
+  "numpy>=2.0",
+  "xgboost>=2.1",
+  "sentence-transformers>=3.3",
+  "splink>=4.0",
+  "scikit-learn>=1.5",
+  # Zero-cost enrichment: registry scraping and open SERP search.
+  "beautifulsoup4>=4.12",
+  "ddgs>=9.0",
+]
+dev = [
+  "types-PyYAML>=6.0",
+  # A local S3 endpoint for the presigned-upload tests: real HTTP PUTs, no
+  # cloud account.
+  "moto[server]>=5.0",
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "httpx>=0.28",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  # `mypy app` covers app/ml_pipeline, which is typed against pandas. Without
+  # these stubs it fails on the import rather than on anything we wrote.
+  "pandas-stubs>=2.2",
+  # The integration suite holds real database locks. A lock-wait deadlock
+  # there blocks forever — Postgres cannot break a cycle where one side is
+  # waiting on ClientRead — so the suite needs its own deadline rather than
+  # hanging CI until someone notices.
+  "pytest-timeout>=2.3",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N"]
+
+[tool.ruff.lint.pep8-naming]
+# `@declared_attr` hands the *class* to the decorated function, so `cls` is
+# the correct first-argument name and N805's "rename to self" would be wrong.
+# Declared here rather than suppressed per-site so every future mixin column
+# gets the same treatment without another noqa.
+classmethod-decorators = ["declared_attr", "sqlalchemy.orm.declared_attr"]
+
+[tool.mypy]
+# 3.12, not the 3.11 floor in requires-python: numpy >= 2.3 ships stubs that
+# use PEP 695 `type` statements, which mypy refuses to parse when told to
+# target 3.11 — it fails inside numpy's own .pyi before reaching our code.
+# Raising the check target does NOT raise the runtime floor; the package still
+# installs and runs on 3.11. If 3.11 support ever needs type-level proof, that
+# is a CI matrix entry, not this setting.
+python_version = "3.12"
+plugins = []
+warn_unused_ignores = true
+disallow_untyped_defs = true
+exclude = ["^migrations/"]
+
+# Third-party packages that ship no py.typed marker and have no stub package.
+# Scoped to the specific modules rather than set globally, so that a *new*
+# untyped import has to be added here deliberately instead of being swallowed.
+[[tool.mypy.overrides]]
+module = ["splink.*", "sentence_transformers.*", "xgboost.*", "ddgs.*", "boto3.*", "botocore.*", "moto.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# No single test should take two minutes. The number is a deadlock detector,
+# not a performance budget: the slowest honest test here (Splink training on
+# a real job) runs in seconds.
+timeout = 120
+markers = [
+  "integration: requires a live Postgres from docker-compose",
+]

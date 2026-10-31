@@ -1,0 +1,85 @@
+# Shared Indian geography. Not an ontology on its own (leading underscore):
+# domain ontologies pull it in with `extends: _india`. Child values win on
+# conflict; mappings merge, lists replace.
+
+fields:
+  district: [district, districtname, dist, distt]
+  state: [state, statename, stateut, stateutname]
+  pincode: [pincode, pin, pincodeno, postalcode, zip, zipcode]
+
+# A single "locality, district, state" column some exports carry instead of
+# separate columns (e.g. SNOP's `localityDistrictState`). State is the last
+# segment, district the one before, anything earlier is locality.
+combined_location_fields: [localitydistrictstate, districtstate, citydistrictstate]
+
+# Applied to the state field only, after normalisation. Codes are the
+# vehicle-registration / LGD-style abbreviations seen in real exports.
+state_aliases:
+  ap: andhra pradesh
+  ar: arunachal pradesh
+  as: assam
+  br: bihar
+  cg: chhattisgarh
+  ct: chhattisgarh
+  ga: goa
+  gj: gujarat
+  hr: haryana
+  hp: himachal pradesh
+  jh: jharkhand
+  jk: jammu and kashmir
+  jammu kashmir: jammu and kashmir
+  ka: karnataka
+  kl: kerala
+  mp: madhya pradesh
+  mh: maharashtra
+  mn: manipur
+  ml: meghalaya
+  mz: mizoram
+  nl: nagaland
+  od: odisha
+  or: odisha
+  orissa: odisha
+  pb: punjab
+  rj: rajasthan
+  sk: sikkim
+  tn: tamil nadu
+  tg: telangana
+  ts: telangana
+  tr: tripura
+  up: uttar pradesh
+  uk: uttarakhand
+  ut: uttarakhand
+  uttaranchal: uttarakhand
+  wb: west bengal
+  an: andaman and nicobar islands
+  andaman nicobar islands: andaman and nicobar islands
+  ch: chandigarh
+  dl: delhi
+  nct of delhi: delhi
+  new delhi: delhi
+  ld: lakshadweep
+  py: puducherry
+  pondicherry: puducherry
+  la: ladakh
+
+# Official renames. Old and new spellings of one district must block and
+# compare as one place.
+district_aliases:
+  gurgaon: gurugram
+  allahabad: prayagraj
+  faizabad: ayodhya
+  mewat: nuh
+  hoshangabad: narmadapuram
+  osmanabad: dharashiv
+  ahmednagar: ahilyanagar
+
+pincode:
+  # Indian PIN: six digits, never starting with 0.
+  pattern: '(?<!\d)([1-9]\d{5})(?!\d)'
+  # Many exports bury the PIN at the end of the address instead of giving
+  # it a column. Only used when the pincode column yields nothing.
+  search_address: true
+
+text:
+  collapse_spaced_acronyms: true
+  max_expansion_passes: 5

@@ -1,0 +1,17 @@
+DROP INDEX IF EXISTS ix_task_queue_job_id;
+DROP INDEX IF EXISTS ix_feedback_events_job_id;
+DROP INDEX IF EXISTS ix_feedback_events_cluster_id;
+DROP INDEX IF EXISTS ix_human_feedback_master_record_id;
+DROP INDEX IF EXISTS ix_human_feedback_cluster_id;
+DROP INDEX IF EXISTS ix_gold_links_target_record_id;
+DROP INDEX IF EXISTS ix_gold_links_record_id;
+DROP INDEX IF EXISTS ix_pair_labels_record_r;
+DROP INDEX IF EXISTS ix_pair_labels_record_l;
+DROP INDEX IF EXISTS ix_pair_scores_record_l;
+DROP INDEX IF EXISTS ix_candidate_pairs_record_id_b;
+DROP INDEX IF EXISTS ix_candidate_pairs_record_id_a;
+DROP INDEX IF EXISTS ix_cluster_members_record_id;
+DROP INDEX IF EXISTS ix_clusters_master_record_id;
+DROP INDEX IF EXISTS ix_clusters_job_id;
+DROP INDEX IF EXISTS ix_silver_records_job_id;
+DROP INDEX IF EXISTS ix_school_records_job_id;
